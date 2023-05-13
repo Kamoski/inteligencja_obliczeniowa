@@ -1,0 +1,4 @@
+numpy
+stable_baselines3
+gym
+matplotlib
