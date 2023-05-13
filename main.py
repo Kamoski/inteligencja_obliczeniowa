@@ -128,8 +128,6 @@ class VehicleRoutingEnv(Env):
     def _get_observation(self):
         return np.hstack((self.points.flatten(), self.remaining_goods))
 
-# The rest of the code remains the same
-
 def main():
     env = DummyVecEnv([VehicleRoutingEnv for _ in range(4)])
     model = PPO("MlpPolicy", env, verbose=1, learning_rate=0.0003, n_steps=2048, n_epochs=10)
