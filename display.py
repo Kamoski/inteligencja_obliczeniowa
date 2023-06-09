@@ -1,57 +1,47 @@
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from itertools import cycle
+import random
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import FancyArrow
 
-def plot_route(route, env):
-    points = env.points
+def animate(env, actions):
+    fig, ax = plt.subplots()
 
-    plt.figure(figsize=(10, 10))
-    plt.scatter(points[:, 0], points[:, 1], s=200, c='red', marker='o', label='Locations')
-    plt.scatter(points[0, 0], points[0, 1], s=200, c='blue', marker='s', label='Depot')
-
-    for i, txt in enumerate(range(env.num_points)):
-        plt.annotate(txt, (points[i, 0] + 1, points[i, 1] + 1))
-
+    # Generate distinct colors
+    colors = list(plt.cm.colors.CSS4_COLORS.values())
+    color_cycler = cycle(colors)
     
-    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']  # Define as many colors as needed
-
-    for car_id, car_route in route.items():
-        car_route_points = [points[point] for point in car_route]
-        car_route_lines = np.array(car_route_points)
-        plt.plot(car_route_lines[:, 0], car_route_lines[:, 1], '--', color=colors[car_id % len(colors)], label=f'Route {car_id}')
+    line_color = {k: next(color_cycler) for k in actions}
     
-    plt.xlabel('X coordinate')
-    plt.ylabel('Y coordinate')
-    plt.legend()
-    plt.title('Vehicle Routing')
-    plt.show()
+    def init():
+        ax.scatter(env[:, 0], env[:, 1])
+        for i, coord in enumerate(env):
+            ax.text(coord[0] + random.uniform(-0.5, 0.5), coord[1] + random.uniform(-0.5, 0.5), str(i), fontsize=12, ha='right')
+        ax.scatter([0], [0], color='red', label='Depot')  # depot point at (0,0)
+        ax.set_xlim(-1, 10)
+        ax.set_ylim(-1, 10)
+        
+        # Adding legend
+        for k, color in line_color.items():
+            ax.plot([], [], color=color, label=f'Line {k}')
+        ax.legend(loc='upper right')
 
-def animate_route(route, env):
-    points = env.points
+    # flatten the action points for sequential animation
+    flat_actions = [(k, pt) for k, v in actions.items() for pt in zip(v, v[1:])]
 
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.scatter(points[:, 0], points[:, 1], s=200, c='red', marker='o', label='Locations')
-    ax.scatter(points[0, 0], points[0, 1], s=200, c='blue', marker='s', label='Depot')
+    def update(frame):
+        key, (pt1, pt2) = flat_actions[frame]
+        ax.set_title(f'Animating for key: {key}')
+        pt1_coords = [0, 0] if pt1 == -1 else env[pt1]
+        pt2_coords = [0, 0] if pt2 == -1 else env[pt2]
+        ax.plot([pt1_coords[0], pt2_coords[0]], [pt1_coords[1], pt2_coords[1]], color=line_color[key])
 
-    for i, txt in enumerate(range(env.num_points)):
-        ax.annotate(txt, (points[i, 0] + 1, points[i, 1] + 1))
+        # Draw arrow on line
+        arrow = FancyArrow(pt1_coords[0], pt1_coords[1], pt2_coords[0] - pt1_coords[0], pt2_coords[1] - pt1_coords[1],
+                           color=line_color[key], width=0.02, length_includes_head=True, head_width=0.1)
+        arrow_collection = PatchCollection([arrow])
+        ax.add_collection(arrow_collection)
 
-    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']  # Define as many colors as needed
-
-    # Initialize empty lines for each car
-    lines = [ax.plot([], [], '--', color=colors[car_id % len(colors)], label=f'Route {car_id}')[0] for car_id in range(env.max_vehicles)]
-
-    def animate(i):
-        for car_id in range(env.max_vehicles):
-            if car_id in route.keys():
-                car_route_points = [points[point] for point in route[car_id][:i+1]]  # Get points visited by the car up to i
-                car_route_lines = np.array(car_route_points)
-                lines[car_id].set_data(car_route_lines[:, 0], car_route_lines[:, 1])
-        return lines
-
-    ani = animation.FuncAnimation(fig, animate, frames=len(route[0]), interval=500, blit=True)
-    plt.xlabel('X coordinate')
-    plt.ylabel('Y coordinate')
-    plt.legend()
-    plt.title('Vehicle Routing')
+    ani = animation.FuncAnimation(fig, update, frames=len(flat_actions), init_func=init, interval=1000, repeat=False)
     plt.show()

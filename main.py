@@ -1,65 +1,58 @@
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv
+from environment import DeliveryVehicles
+from display import animate
 
-import display as dsp
-import enviroment as my_env
+def train_model():
+    env = DeliveryVehicles()
+    model = PPO('MlpPolicy', env, verbose=0, learning_rate=0.0001, gamma=0.4, ent_coef=0.4)
 
-testing = False
+    #model = PPO.load("ppo_vrp", env)
+    for i in range(1, 5):
+        model.learn(total_timesteps=10000)
+        for j in range(1, 20):
+            actions, done = evaluate_model(model)
+            if done:
+                for key, values in actions.items():
+                    animate(env.points_coordinates, {key:values})
+                print("SUKCES!")
+                model.save("ppo_vrp")
+                break
+        if done:
+            break
 
+    model.save("ppo_vrp")
+    return model
 
-def find_best_route(model, env, max_steps=500):
+def evaluate_model(model):
+    env = DeliveryVehicles()
+
     obs = env.reset()
     done = False
+    actions = {}
     steps = 0
-    route = {}
+    max_steps = 300  # Set this to a reasonable value for your problem
     while not done and steps < max_steps:
-        action, _ = model.predict(obs, deterministic=True)
-        obs, _, done, additional_data = env.step(action)
-        
-        if additional_data:
-            car_id = additional_data["car_id"]
-            current_point = additional_data["current_point"]
-            if car_id not in route:
-                route[car_id] = [0]
-            route[car_id].append(current_point)
+        action, _states = model.predict(obs, deterministic=True)
+        obs, reward, done, info = env.step(action)
+        vehicle_idx, point_idx = action
+        if vehicle_idx not in actions:
+            actions[vehicle_idx] = [-1]
+        actions[vehicle_idx].append(point_idx)
+        if info["went_back"]:
+            actions[vehicle_idx].append(-1)
             
-        steps += 1
-    return route
 
+        steps += 1
+        if steps % 5 == 0 or reward>0:  # Print information every 100 steps
+            print(f"Step: {steps}, Action: {action}, Reward: {reward}")
+
+    if steps == max_steps:
+        print("Reached maximum number of steps!")
+    print(actions)
+    return actions, done
 
 def main():
-    train_and_save_model();
-    for i in range(1, 30):
-        train_existing_model();
-        load_and_run_model();
-
-def train_existing_model():
-    env = DummyVecEnv([lambda: my_env.VehicleRoutingEnv() for _ in range(4)])
-    model = PPO.load("vehicle_routing_model")
-    model.set_env(env)
-
-    for i in range(1, 5):
-        model.learn(total_timesteps=25000)
-
-    model.save("vehicle_routing_model") 
-
-def train_and_save_model():
-    env = DummyVecEnv([lambda: my_env.VehicleRoutingEnv() for _ in range(4)])
-    model = PPO("MlpPolicy", env, verbose=2, learning_rate=0.000003, n_steps=4096, n_epochs=10, gamma=0.4)
-    model.learn(total_timesteps=20000)
-    model.save("vehicle_routing_model")
-
-def load_and_run_model():
-    global testing
-    testing = True
-    env = my_env.VehicleRoutingEnv()
-    model = PPO.load("vehicle_routing_model")
-    
-    best_route = find_best_route(model, env)
-    print(f"Best route: {best_route}")
-    
-    #dsp.plot_route(best_route, env)
-    #dsp.animate_route(best_route, env)
+    model = train_model()
 
 if __name__ == "__main__":
     main()
